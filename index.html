@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calendario 2026 — PDFs desde Drive</title>
+  <style>
+    body{
+      margin:0;background:#121212;color:#fff;font-family:Arial, sans-serif;
+    }
+    h1{text-align:center;margin:20px 0;color:#ff8a00;}
+    .calendario{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:20px;}
+    .mes{
+      background:#1e1e1e;padding:15px;border-radius:12px;box-shadow:0 0 10px #0003;
+    }
+    .mes h2{text-align:center;color:#ff4d4d;}
+
+    .dias-nombres{
+      display:grid;grid-template-columns:repeat(7,1fr);
+      gap:5px;text-align:center;font-weight:bold;margin-top:10px;color:#cbd5e1;
+    }
+    .dias{
+      display:grid;grid-template-columns:repeat(7,1fr);
+      gap:5px;margin-top:10px;
+    }
+    .dia{
+      background:#222;padding:10px;border-radius:8px;text-align:center;cursor:pointer;
+      min-height:60px;position:relative;border:1px solid #333;color:#e6eef8;
+    }
+    .dia:hover{background:#333;}
+
+    /* Colores especiales */
+    .naranja{background:#ff8a00;color:#000 !important;}
+    .domingo{
+      background: linear-gradient(to right, #ff0000 50%, #8000ff 50%);
+      color:#fff !important;
+    }
+
+    /* Miniatura PDF */
+    .thumb{
+      width:100%;height:50px;object-fit:cover;border-radius:6px;margin-top:5px;
+    }
+
+    /* Modal */
+    #modal{
+      position:fixed;top:0;left:0;width:100%;height:100%;background:#000c;
+      display:none;justify-content:center;align-items:center;
+    }
+    #modalBox{
+      background:#1e1e1e;padding:20px;border-radius:12px;width:90%;max-width:400px;
+    }
+    input{
+      width:100%;padding:10px;border-radius:8px;border:none;margin-top:10px;
+    }
+    button{
+      margin-top:10px;padding:10px;width:100%;border:none;border-radius:8px;
+      background:#ff8a00;font-size:16px;font-weight:bold;cursor:pointer;
+    }
+    iframe{
+      width:90%;height:90%;border:none;border-radius:12px;
+    }
+    #visor{
+      position:fixed;top:0;left:0;width:100%;height:100%;background:#000e;
+      display:none;justify-content:center;align-items:center;flex-direction:column;
+    }
+    #cerrarVisor{
+      background:#ff4d4d;color:#fff;padding:10px 20px;border:none;border-radius:8px;
+      margin-bottom:10px;font-size:18px;cursor:pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Calendario 2026 — PDFs desde Drive</h1>
+<div class="calendario" id="calendario"></div>
+
+<!-- Modal para agregar link -->
+<div id="modal">
+  <div id="modalBox">
+    <h3>Agregar PDF desde Drive</h3>
+    <input type="text" id="pdfLink" placeholder="Pega aquí el link de Drive">
+    <button onclick="guardarPDF()">Guardar</button>
+    <button onclick="cerrarModal()" style="background:#666">Cancelar</button>
+  </div>
+</div>
+
+<!-- Visor PDF -->
+<div id="visor">
+  <button id="cerrarVisor" onclick="cerrarVisorPDF()">Cerrar PDF</button>
+  <iframe id="visorFrame"></iframe>
+</div>
+
+<script>
+const meses = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
+const diasPorMes = [31,28,31,30,31,30,31,31,30,31,30,31];
+let diaSeleccionado = null;
+let pdfsGuardados = {
+  // Ejemplos de PDFs agregados manualmente desde HTML
+  "0-1": "https://drive.google.com/file/d/12DL0mLfguAYxDAMfqEmluvEqiycOxg5O/view?usp=sharing", // 1 de Enero
+  "2-10": "https://drive.google.com/file/d/12DL0mLfguAYxDAMfqEmluvEqiycOxg5O/view?usp=sharing", // 10 de Marzo
+  "4-25": "https://drive.google.com/file/d/ID_PDF3/preview"  // 25 de Mayo
+};
+
+function generarCalendario(){
+  const cont = document.getElementById("calendario");
+  cont.innerHTML = ''; // limpiar antes de generar
+
+  meses.forEach((mes, i) =>{
+    const div = document.createElement("div");
+    div.className = "mes";
+
+    div.innerHTML = `<h2>${mes}</h2><div class='dias-nombres'>
+        <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+      </div>
+      <div class='dias' id='m${i}'></div>`;
+    cont.appendChild(div);
+
+    const diasDiv = div.querySelector('.dias');
+
+    const primerDia = new Date(2026, i, 1).getDay();
+    const offset = (primerDia === 0 ? 6 : primerDia - 1);
+
+    for(let k=0; k<offset; k++){
+      const vacio = document.createElement("div");
+      vacio.className = "dia";
+      diasDiv.appendChild(vacio);
+    }
+
+    for(let d=1; d<=diasPorMes[i]; d++){
+      const dia = document.createElement("div");
+      const fecha = new Date(2026, i, d);
+      const esDomingo = fecha.getDay() === 0;
+      const esJueves = fecha.getDay() === 4;
+
+      dia.className = "dia" + (esDomingo ? " domingo" : esJueves ? " naranja" : "");
+      dia.textContent = d;
+      dia.onclick = ()=>abrirModal(i, d, dia);
+
+      const key = `${i}-${d}`;
+      if(pdfsGuardados[key]){
+        dia.innerHTML = `${d}<img class='thumb' src='https://drive.google.com/thumbnail?id=${extraerID(pdfsGuardados[key])}'>`;
+        dia.onclick = ()=>abrirPDF(pdfsGuardados[key]);
+      }
+
+      diasDiv.appendChild(dia);
+    }
+  });
+}
+
+generarCalendario();
+
+function abrirModal(m, d, elemento){
+  diaSeleccionado = {m, d, elemento};
+  document.getElementById('modal').style.display = 'flex';
+}
+function cerrarModal(){
+  document.getElementById('modal').style.display = 'none';
+  document.getElementById('pdfLink').value = '';
+}
+
+function extraerID(link){
+  const match = link.match(/[-\w]{25,}/);
+  return match ? match[0] : "";
+}
+
+function guardarPDF(){
+  const link = document.getElementById("pdfLink").value.trim();
+  if(!link) return;
+  if(!diaSeleccionado) return alert('Selecciona un día antes de guardar.');
+
+  const {m, d, elemento} = diaSeleccionado;
+  const key = `${m}-${d}`;
+  pdfsGuardados[key] = link;
+
+  elemento.innerHTML = `${d}<img class='thumb' src='https://drive.google.com/thumbnail?id=${extraerID(link)}'>`;
+  elemento.onclick = ()=>abrirPDF(link);
+
+  cerrarModal();
+}
+
+function abrirPDF(link){
+  const id = extraerID(link);
+  const visor = document.getElementById("visor");
+  const iframe = document.getElementById("visorFrame");
+  if(!id){
+    alert('No se pudo extraer el ID de Drive. Asegúrate de pegar un link válido de Drive (file/d/ID o sharing link).');
+    return;
+  }
+  iframe.src = `https://drive.google.com/file/d/${id}/preview`;
+  visor.style.display = 'flex';
+}
+
+function cerrarVisorPDF(){
+  document.getElementById("visor").style.display = 'none';
+  document.getElementById("visorFrame").src = '';
+}
+</script>
+
+</body>
+</html>
